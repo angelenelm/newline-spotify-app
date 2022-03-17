@@ -8,7 +8,9 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI;
 
-console.log(process.env.CLIENT_ID);
+app.get("/", (req, res) => {
+  res.send("newline-spotify-app");
+});
 
 /**
  * Generates a random string containing numbers and letters
@@ -17,8 +19,7 @@ console.log(process.env.CLIENT_ID);
  */
 const generateRandomString = (length) => {
   let text = "";
-  const possible =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   for (let i = 0; i < length; i++) {
     text += possible.charAt(Math.floor(Math.random() * possible.length));
   }
@@ -41,7 +42,7 @@ app.get("/login", (req, res) => {
     scope: scope,
   });
 
-  res.redirect(`https://accounts.spotify.com/authorize?${params}`);
+  res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`);
 });
 
 app.get("/callback", (req, res) => {
@@ -49,7 +50,57 @@ app.get("/callback", (req, res) => {
 
   axios({
     method: "post",
-  });
+    url: "https://accounts.spotify.com/api/token",
+    data: new URLSearchParams({
+      code: code,
+      grant_type: "authorization_code",
+      redirect_uri: REDIRECT_URI,
+    }).toString(),
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${new Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64")}`,
+    },
+  })
+    .then((response) => {
+      if (response.status === 200) {
+        const { access_token, refresh_token } = response.data;
+
+        const queryParams = new URLSearchParams({
+          access_token,
+          refresh_token,
+        }).toString();
+
+        res.redirect(`http://localhost:3000/?${queryParams}`);
+      } else {
+        res.redirect(`/?${new URLSearchParams({ error: "invalid_token" }).toString()}`);
+      }
+    })
+    .catch((error) => {
+      res.send(error);
+    });
+});
+
+app.get("/refresh_token", (req, res) => {
+  const { refresh_token } = req.query;
+
+  axios({
+    method: "post",
+    url: "https://accounts.spotify.com/api/token",
+    data: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refresh_token,
+    }).toString(),
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${new Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64")}`,
+    },
+  })
+    .then((response) => {
+      res.send(response.data);
+    })
+    .catch((error) => {
+      res.send(error);
+    });
 });
 
 app.listen(port, () => {
